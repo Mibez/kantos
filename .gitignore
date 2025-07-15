@@ -1,3 +1,6 @@
 qemu/
 .vscode/
 build/
+
+toolchain/*
+!toolchain/.gitkeep
