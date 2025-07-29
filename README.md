@@ -40,5 +40,5 @@ when toolchain is extracted, run make in project base
 ## Debugging ##
 1. See "Running"
 2. Run GDB server (from CubeCLT) on host `./ST-LINK_gdbserver.exe -cp "/C/Program Files/STMicroelectronics/STM32Cube/STM32CubeProgrammer/bin/" -k`
-3. Run GDB client (from toolchain) `toolchain/arm-gnu-toolchain-14.2.rel1-x86_64-arm-none-eabi/bin/arm-none-eabi-gdb -ex "target remote $(hostname).local:61234" --se=build/kernel.elf
+3. Run GDB client (from toolchain) `toolchain/arm-gnu-toolchain-14.2.rel1-x86_64-arm-none-eabi/bin/arm-none-eabi-gdb -ex "target remote $(hostname).local:61234" --se=build/kernel.elf`
 
