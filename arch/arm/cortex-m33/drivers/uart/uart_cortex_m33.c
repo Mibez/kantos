@@ -1,12 +1,13 @@
 /*
- * @file main.c
- * @brief Startup code for Cortex-M33 processor
+ * @file uart_cortex_m33.c
+ * @brief STM32 U5 UART simple driver implementation
  *
  *      Copyright (c) 2025 Miikka Lukumies
  */
 
-/* ========================= INCLUDES ========================= */
+/* =================== INCLUDES =============================== */
 #include <stdint.h>
+#include "uart.h"
 
 /* ========================= CONSTANTS ========================= */
 
@@ -26,7 +27,7 @@ static volatile uint32_t * const RCC_CCIPR1_REG     = (uint32_t*)(RCC_REG_BASE_A
 
 /* STM32U545XX GPIOA registers */
 #define GPIOA_REG_BASE_ADDR (uint32_t)0x42020000
-static volatile uint32_t * const GPIOA_ODR_REG      = (uint32_t*)(GPIOA_REG_BASE_ADDR + 0x14);  /* GPIOA Output Data Register */
+// static volatile uint32_t * const GPIOA_ODR_REG      = (uint32_t*)(GPIOA_REG_BASE_ADDR + 0x14);  /* GPIOA Output Data Register */
 static volatile uint32_t * const GPIOA_MODER_REG    = (uint32_t*)(GPIOA_REG_BASE_ADDR + 0x00);  /* GPIOA MODE Register */
 static volatile uint32_t * const GPIOA_OSPEEDR_REG  = (uint32_t*)(GPIOA_REG_BASE_ADDR + 0x08);  /* GPIOA Output SPEED Register */
 static volatile uint32_t * const GPIOA_PUPDR_REG    = (uint32_t*)(GPIOA_REG_BASE_ADDR + 0x0C);  /* GPIOA Pull-Up/Pull-Down Register */
@@ -84,33 +85,23 @@ static volatile uint32_t * const GPIOA_AFRH_REG     = (uint32_t*)(GPIOA_REG_BASE
 #define GPIOA_CLK_ENABLE_REG    (RCC_AHB2ENR1_REG)
 #define UART1_CLK_ENABLE_REG    (RCC_APB2ENR_REG)
 
-/** @brief Define this to add LED blinking before each uart_print */
-#define DEBUG_BLINK
+/* ========================= FUNCTION DECLARATIONS ========================= */
+
+int STM_UART_init(void);
+int STM_UART_printc(const char *c);
+int STM_UART_printstr(const char *msg);
 
 /* ========================= STATIC DATA ========================= */
 
-/** @brief Sample data in .data section */
-static char data_buffer[] = "Hello, .data\r\n";
 
-/** @brief Sample data in .rodata section */
-static const char rodata_buffer[] = "Hello, .rodata\r\n";
-
-/** @brief Sample data in .bss section */
-static char bss_buffer[128];
-
-/* ========================= FUNCTION DECLARATIONS ========================= */
+static const UartDriver drv = {
+    &STM_UART_init,
+    &STM_UART_printc,
+    &STM_UART_printstr
+};
+const UartDriver *Uart_Driver = &drv;
 
 /* ========================= FUNCTION DEFINITIONS ========================= */
-
-/**
- * @brief Busy loop for a fraction of a second
- */
-void short_busy_sleep(void)
-{
-    uint32_t i;
-    /* Loop for some time */
-    for(i = 0; i < 0xFFFF; i++) { ; }
-}
 
 /**
  * @brief Enable GPIOA peripheral clock in RCC
@@ -139,39 +130,12 @@ void usart1_clock_enable(void)
 }
 
 /**
- * @brief Setup User LED as output
+ * @brief Initialize the USART1 peripheral
+ * @note  Configures clock sources, pinmuxes, and enables the peripheral
+ * 
+ * @return 0 on success
  */
-void user_led_setup(void)
-{
-    uint32_t temp;
-
-    /* Enable GPIOA peripheral clock */
-    gpioa_clock_enable();
-
-    /* Configure PA5 (user LED LD2 on Nucleo) to output */
-    temp = *GPIOA_MODER_REG;
-    temp &= ~((GPIO_MODE_MASK << 5*2));
-    temp |= (0x1 << 5*2);
-    *GPIOA_MODER_REG = temp;
-
-}
-/**
- * @brief Toggel user LED state
- */
-void user_led_toggle(void)
-{
-    uint32_t temp;
- 
-    /* Toggle led */
-    temp = *GPIOA_ODR_REG;
-    temp = temp ^ (1 << 5);
-    *GPIOA_ODR_REG = temp;
-}
-
-/**
- * @brief Setup UART1 for TX only
- */
-void uart_setup(void)
+int STM_UART_init(void)
 {
     uint32_t temp;
 
@@ -214,66 +178,55 @@ void uart_setup(void)
 
     /* Enable UART */
     *UART_CONTROL_REGISTER = USART_CR1_UE | USART_CR1_TE;
+
+    return 0;
+}
+
+
+/**
+ * @brief Prints one character to USART1 output
+ * 
+ * @return 0 on success, -1 on error
+ */
+int STM_UART_printc(const char *c)
+{
+    /* Null-check parameters */
+    if(!c) {
+        return -1;
+    }
+
+    /* Busy-loop until TXE (Transmit buffer empty flag) is set */
+    while((*UART0_ISR_REG & USART_ISR_TXE) == 0) { ; }
+
+    /* Move byte to UART Transmit Data Register */
+    *UART_DATA_REGISTER = *c;
+
+    /* Busy-loop until TC (Transmit Complete flag) is set */
+    while((*UART0_ISR_REG & USART_ISR_TC) == 0) { ; }
+
+    return 0;
 }
 
 /**
- * @brief Transmit a null-terminated string over UART0
+ * @brief Prints a null-terminated string to USART1 output
+ * 
+ * @return 0 on success
  */
-void uart0_print(const char *s)
+int STM_UART_printstr(const char *msg)
 {
-#ifdef DEBUG_BLINK
-    /* Blink User LED and sleep */
-    user_led_toggle();
-    short_busy_sleep();
-    user_led_toggle();
-    short_busy_sleep();
-#endif /* DEBUG_BLINK */
-
+    
     /* Loop until null character is reached */
-    while(*s != '\0') {
+    while(*msg != '\0') {
 
         /* Busy-loop until TXE (Transmit buffer empty flag) is set */
         while((*UART0_ISR_REG & USART_ISR_TXE) == 0) { ; }
 
-        /* Mode byte to UART Transmit Data Register */
-        *UART_DATA_REGISTER = (*s++);
+        /* Move byte to UART Transmit Data Register */
+        *UART_DATA_REGISTER = (*msg++);
     }
 
     /* Busy-loop until TC (Transmit Complete flag) is set */
-    while((*UART0_ISR_REG & USART_ISR_TC) == 0) {; }
-}
+    while((*UART0_ISR_REG & USART_ISR_TC) == 0) { ; }
 
-/**
- * @brief Entrypoint
- */
-void main(void)
-{
-    /* Sample data in literal pool */
-    char * buffer = "Hello, literal pool!\r\n";
-
-    /* Initialize hardware */
-    user_led_setup();
-    uart_setup();
-
-    /* Print literal pool text */
-    uart0_print(buffer);
-
-    /* Print .data text, modify it, and re-print to show it's writeable */
-    uart0_print(data_buffer);
-    data_buffer[0] = 'B';
-    uart0_print(data_buffer);
-
-    /* Print .rodata text */
-    uart0_print(rodata_buffer);
-
-    /* Set up .bss buffer with some values and print it */
-    bss_buffer[0] = 'B';
-    bss_buffer[1] = 'S';
-    bss_buffer[2] = 'S';
-    bss_buffer[3] = '\r';
-    bss_buffer[4] = '\n';
-    uart0_print(bss_buffer);
-
-    /* Loop forever */
-    while(1) { ; } 
+    return 0;
 }
