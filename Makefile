@@ -16,15 +16,15 @@ INCLUDES := -Idrivers/ -Ilibs/
 
 
 # Optional tuning flags for compiler
-TUNE_CFLAGS =  -Wall -Werror
-# TUNE_CFLAGS = -ffunction-sections -fdata-sections -Wall -Werror
+# TUNE_CFLAGS =  -Wall -Werror
+TUNE_CFLAGS = -ffunction-sections -fdata-sections -Wall -Werror
 
 # Mandatory flags for compiling
-CFLAGS = $(INCLUDES) -fno-exceptions -mcpu=cortex-m33 -mthumb -g -nostdlib -nostartfiles -ffreestanding $(TUNE_CFLAGS) 
+CFLAGS = $(INCLUDES) -fno-exceptions -mcpu=cortex-m33 -mthumb -g -nostdlib -nostartfiles -fno-builtin -ffreestanding $(TUNE_CFLAGS) 
 
 # Linker flags
-LINKER_FLAGS = 
-# LINKER_FLAGS = --gc-sections
+# LINKER_FLAGS = 
+LINKER_FLAGS = --gc-sections
 
 # Executable used to figure out route to Windows host from WSL
 HOSTNAME=`hostname`
