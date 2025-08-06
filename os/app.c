@@ -27,7 +27,11 @@ static const char rodata_buffer[] = "Hello, .rodata";
 static char bss_buffer[128];
 
 /** @brief Secondary tick counter */
-static uint32_t test_tick;
+static volatile uint32_t test_tick;
+
+/** @brief PendSV flag to verify it is triggered */
+static volatile uint32_t test_pendsv;
+
 
 /* ========================= FUNCTION DECLARATIONS ========================= */
 
@@ -39,6 +43,15 @@ static uint32_t test_tick;
  */
 void tick_callback(void) {
     test_tick += 1;
+}
+
+/**
+ * @brief PendSV interrupt callback
+ * @n Just sets a flag for now
+ */
+void pendsv_callback(void)
+{
+    test_pendsv = 1;
 }
 
 /**
@@ -76,6 +89,9 @@ void main(void)
     /* Initialize system tick with 1s interval, and the callback */
     TICK_init(1000, &tick_callback);
 
+    /* Register the PendSV callback */
+    PendSV_init(&pendsv_callback);
+
     /* Loop forever and print current tick count. Proves both that the
         internal tick count is incremented, and that the custom callback
         is being run */
@@ -85,6 +101,16 @@ void main(void)
             prevticks = ticks;
             print_hex("Tick count: ", (uint32_t)test_tick);
 
+            /* Trigger the PendSV interrupt every 3rd iteration */
+            if(test_tick % 3 == 0) {
+                (void)PendSV_trigger();
+            }
+
+            print_hex("PendSV: ", (uint32_t)test_pendsv);
+
+            if(test_pendsv) {
+                test_pendsv = 0;
+            }
         }
     }
 

@@ -17,15 +17,23 @@
 
 /* =================== TYPE DEFINITIONS ======================= */
 
-typedef void (*Tick_Handler)(void);
+/** @brief SysTick ISR callback function pointer */
+typedef void (*Tick_Callback)(void);
 
+/** @brief PendSV ISR callback function pointer */
+typedef void (*PendSV_Callback)(void);
+
+/** @brief Abstract System Driver vtable definition */
 typedef struct SystemDriver {
-    const int (* const TickInit)(int, Tick_Handler);
+    const int (* const TickInit)(int, Tick_Callback);
+    const int (* const PendSVInit)(PendSV_Callback);
     const uint64_t (* const GetTicks)(void);
     const void (* const Sleep)(int);
     const void (* const BusySleep)(int);
+    const void (* const PendSVTrigger)(void);
 } SystemDriver;
 
+/** @brief Pointer to SystemDriver implementation */
 extern const SystemDriver *Sys_Driver;
 
 /* =================== FUNCTION DECLARATIONS ================== */
@@ -37,7 +45,7 @@ extern const SystemDriver *Sys_Driver;
  * 
  * @return SYSTEM_OK on success, SYSTEM_ERROR otherwise
  */
-static inline int TICK_init(int ms, Tick_Handler cb)
+static inline int TICK_init(int ms, Tick_Callback cb)
 {
     if(!Sys_Driver || !cb) {
         return SYSTEM_ERROR;
@@ -62,6 +70,39 @@ static inline uint64_t TICK_get(void)
 
     return Sys_Driver->GetTicks();
 }
+
+/**
+ * @brief Set a callback for the PendSV interrupt
+ * @param[in] cb    callback
+ * 
+ * @return SYSTEM_OK on success, SYSTEM_ERROR otherwise
+ */
+static inline int PendSV_init(PendSV_Callback cb)
+{
+    if(!Sys_Driver || !cb) {
+        return SYSTEM_ERROR;
+    }
+    
+    if(Sys_Driver->PendSVInit(cb) != 0) {
+        return SYSTEM_ERROR;
+    }
+    return SYSTEM_OK;
+}
+
+/**
+ * @brief Trigger the PendSV interrupt
+ */
+static inline int PendSV_trigger()
+{
+    if(!Sys_Driver) {
+        return SYSTEM_ERROR;
+    }
+    
+    Sys_Driver->PendSVTrigger();
+
+    return SYSTEM_OK;
+}
+
 
 /**
  * @brief Blocking sleep using system tick. Yields current task

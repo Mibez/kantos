@@ -12,34 +12,48 @@
 /* ========================= CONSTANTS ========================= */
 // https://developer.arm.com/documentation/100235/0100/The-Cortex-M33-Peripherals/System-timer--SysTick
 #define SCS_BASE            (0xE000E000UL)
-#define SysTick_BASE        (SCS_BASE +  0x0010UL)
-#define SYSTICK_CTRL        (uint32_t*)(SysTick_BASE + 0x0UL)
-#define SYSTICK_RVR         (uint32_t*)(SysTick_BASE + 0x4UL)
-#define SYSTICK_CVR         (uint32_t*)(SysTick_BASE + 0x8UL)
-#define NVIC_SHPR3          (uint32_t*)(SCS_BASE + 0xD20UL)
+
+#define SYSTICK_BASE        (SCS_BASE +  0x0010UL)
+#define SYSTICK_CTRL        (volatile uint32_t*)(SYSTICK_BASE + 0x0UL)
+#define SYSTICK_RVR         (volatile uint32_t*)(SYSTICK_BASE + 0x4UL)
+#define SYSTICK_CVR         (volatile uint32_t*)(SYSTICK_BASE + 0x8UL)
 #define SYSTICK_PRIO_MASK   (0xFFUL << 24)
 #define SYSTICK_PRIO        (0xC0UL << 24)
 
+#define NVIC_ICSR           (volatile uint32_t*)(SCS_BASE + 0xD04UL)
+#define NVIC_SHPR3          (volatile uint32_t*)(SCS_BASE + 0xD20UL)
+#define PENDSV_SET          (0x1UL << 28)
+
 /* ========================= FUNCTION DECLARATIONS ========================= */
 
-int STM_TICK_init(int ms, Tick_Handler cb);
+int STM_TICK_init(int ms, Tick_Callback cb);
+int STM_PendSV_init(PendSV_Callback cb);
 uint64_t STM_TICK_get(void);
 void STM_sleep(int ms);
 void STM_busy_sleep(int ms);
+void STM_PendSV_trigger(void);
 
 /* ========================= STATIC DATA ========================= */
 
+/** @brief System driver vtable */
 static SystemDriver drv = {
     &STM_TICK_init,
+    &STM_PendSV_init,
     &STM_TICK_get,
     &STM_sleep,
-    &STM_busy_sleep
+    &STM_busy_sleep,
+    &STM_PendSV_trigger
 };
 
+/** @brief System driver pointer, matching extern in os driver abstraction */
 const SystemDriver *Sys_Driver = &drv;
 
-static Tick_Handler tick_cb;
-static uint64_t systicks;
+/** @brief Static pointers for ISR callbacks */
+static Tick_Callback tick_cb;
+static PendSV_Callback psv_cb;
+
+/** @brief System tick counter */
+static volatile uint64_t systicks;
 
 /* ========================= FUNCTION DEFINITIONS ========================= */
 
@@ -64,7 +78,7 @@ void  __attribute__( ( naked ) ) SysTick_Handler(void)
     asm("str  r5, [r2, #0]");
     asm("str  r6, [r2, #4]");
 
-    /* Call systick handler, null-checking the tick_cb pointer*/
+    /* Call systick handler, null-checking the tick_cb pointer */
     asm("ldr r1, =tick_cb");
     asm("ldr r1, [r1]");
     asm("subs r1, #0");
@@ -79,11 +93,48 @@ void  __attribute__( ( naked ) ) SysTick_Handler(void)
 }
 
 /**
+ * @brief PendSV ISR
+ * @n Calls the PendSV ISR callback (if set)
+ */
+void __attribute__( ( naked ) ) PendSV_Handler(void)
+{
+    /* Save registers modified by this function (r0-r3 saved in hw) */
+    asm("push {lr}");
+
+    /* Call pendsv handler, null-checking the psv_cb pointer */
+    asm("ldr r0, =psv_cb");
+    asm("ldr r0, [r0]");
+
+    asm("subs r0, #0");
+    asm("it ne");
+    asm("blxne  r0");
+
+    asm("pop {lr}");
+
+    /* Return from interrupt */
+    asm("bx lr");
+}
+
+/**
+ * @brief Trigger PendSV interrupt
+ */
+void STM_PendSV_trigger(void)
+{
+    /* Set PendSV */
+    *NVIC_ICSR = PENDSV_SET;
+
+    /* Sync barriers */
+    asm("dsb");
+    asm("isb");
+}
+
+
+/**
  * @brief SysTick initialization function
  * @n Loads the tick interval register, populates callback, 
  *      and enables the SysTick interrupt
  */
-int STM_TICK_init(int ms, Tick_Handler cb)
+int STM_TICK_init(int ms, Tick_Callback cb)
 {
     uint32_t temp;
     /* Populate the SysTick Reload register value, i.e. tick interval. This is
@@ -108,6 +159,19 @@ int STM_TICK_init(int ms, Tick_Handler cb)
 
     return 0;
 }
+
+/**
+ * @brief PendSV initialization function
+ * @n Populates the pointer to PendSV ISR callback
+ */
+int STM_PendSV_init(PendSV_Callback cb)
+{
+    psv_cb = cb;
+
+    return 0;
+}
+
+
 
 /**
  * @brief Getter for tick count
