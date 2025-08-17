@@ -12,7 +12,7 @@ GDB = $(CROSS_COMPILE)gdb
 OBJDUMP = $(CROSS_COMPILE)objdump
 READELF = $(CROSS_COMPILE)readelf
 
-INCLUDES := -Idrivers/ -Ilibs/
+INCLUDES := -Idrivers/ -Ilibs/ -Ios/
 
 
 # Optional tuning flags for compiler
@@ -40,12 +40,14 @@ BOOT_SRC := $(BOOT_DIR)/boot_cortex_m33.s
 BOARD_SRCS := $(wildcard $(BOOT_DIR)/drivers/*/*.c)
 LIB_SRCS := $(wildcard $(LIBS_DIR)/*/*.c)
 MAIN_SRC := $(OS_DIR)/app.c
+OS_SRCS := $(OS_DIR)/os.c
 
 # Define object files
 BOOT_OBJ := $(BUILD_DIR)/boot_cortex_m33.o
 BOARD_OBJS := $(patsubst $(BOOT_DIR)/drivers/%.c, $(BUILD_DIR)/drivers/%.o, $(BOARD_SRCS))
 LIBS_OBJS := $(patsubst $(LIBS_DIR)/%.c, $(BUILD_DIR)/libs/%.o, $(LIB_SRCS))
 MAIN_OBJ := $(BUILD_DIR)/app.o
+OS_OBJ := $(BUILD_DIR)/os.o
 
 # Define linker script
 LINKER_SCRIPT := $(BOOT_DIR)/link_cortex_m33.ld
@@ -68,9 +70,9 @@ $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)/drivers/uart
 
 # Rule to build the final executable
-$(TARGET): $(BOOT_OBJ) $(MAIN_OBJ) $(BOARD_OBJS) $(LIBS_OBJS) $(BUILD_DIR)
+$(TARGET): $(BOOT_OBJ) $(MAIN_OBJ) $(OS_OBJ) $(BOARD_OBJS) $(LIBS_OBJS) $(BUILD_DIR)
 	@echo "Linking $(TARGET)..."
-	$(LD) -T $(LINKER_SCRIPT) $(LINKER_FLAGS) $(BOOT_OBJ) $(MAIN_OBJ) $(BOARD_OBJS) $(LIBS_OBJS) -o $@
+	$(LD) -T $(LINKER_SCRIPT) $(LINKER_FLAGS) $(BOOT_OBJ) $(MAIN_OBJ) $(OS_OBJ) $(BOARD_OBJS) $(LIBS_OBJS) -o $@
 	$(OBJDUMP) -D $(TARGET) > $(BUILD_DIR)/kernel.list
 
 # Rule to compile boot.s into boot.o
@@ -80,6 +82,11 @@ $(BOOT_OBJ): $(BOOT_SRC) $(BUILD_DIR)
 
 # Rule to compile main.c into main.o
 $(MAIN_OBJ): $(MAIN_SRC) $(BUILD_DIR)
+	@echo "Compiling $< to $@"
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+# Rule to compile os.c into os.o
+$(OS_OBJ): $(OS_SRCS) $(BUILD_DIR)
 	@echo "Compiling $< to $@"
 	$(CC) $(CFLAGS) -c -o $@ $<
 
