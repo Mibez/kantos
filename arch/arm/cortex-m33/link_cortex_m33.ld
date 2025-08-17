@@ -28,6 +28,8 @@ MEMORY
    RAM      (rwx) : ORIGIN = __RAM_BASE,    LENGTH = __RAM_SIZE     /* RAM */
 }
 
+__MAX_NUM_TASKS = 5;
+__TASK_STACK_SIZE = 0x400;
 
 /* ================ SECTIONS ================ */
 SECTIONS
@@ -104,7 +106,17 @@ SECTIONS
         __HeapLimit = .;                        /* Marker for heap end */
     } > RAM
 
-    /* Stack section for all temporary data. Stack grows down - place at the end of RAM */
+    /* Stack section for task stacks */
+    .task_stack (ORIGIN(RAM) + LENGTH(RAM) - __STACK_SIZE - (__TASK_STACK_SIZE * __MAX_NUM_TASKS)) (COPY) :
+    {
+        . = ALIGN(8);                           /* Align following label to eight byte boundary */
+        __TaskStackLimit = .;                   /* Stack limit, i.e. last address of the stack */
+        *(*.task_stacks)                        /* Task stacks go here */
+        . = ALIGN(8);                           /* Align following label to eight byte boundary */
+        __TaskStackTop = .;                     /* Stack top, i.e. first address of the stack */
+    }
+
+    /* Main stack section for all temporary data. Stack grows down - place at the end of RAM */
     .stack (ORIGIN(RAM) + LENGTH(RAM) - __STACK_SIZE) (COPY) :
     {
         . = ALIGN(8);                           /* Align following label to eight byte boundary */
@@ -117,6 +129,7 @@ SECTIONS
 
     /* Stack is loaded into a constant address based on sizes only, make sure it doesn't overflow to .heap */
     ASSERT(__StackLimit >= __HeapLimit, "region .stack overflowed with .heap")
+    ASSERT(__StackLimit >= __TaskStackTop, "region .task_stack overflowed with .stack")
 }
 
 

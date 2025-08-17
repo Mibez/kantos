@@ -10,6 +10,7 @@
 
 #include "uart.h"
 #include "system.h"
+#include "os.h"
 #include "print/print.h"
 
 /* ========================= CONSTANTS ========================= */
@@ -37,30 +38,47 @@ static volatile uint32_t test_pendsv;
 
 /* ========================= FUNCTION DEFINITIONS ========================= */
 
-/**
- * @brief System tick callback
- * @n Implements a secondary tick count for now
- */
-void tick_callback(void) {
-    test_tick += 1;
+/** @brief Sample task A */
+void taskA(void* arg1, void* arg2, void* arg3)
+{
+    (void)arg1;
+    (void)arg2;
+    (void)arg3;
+    uint32_t cnt = 0;
+
+    while(1) {
+        print_hex(__func__, cnt);
+        cnt++;
+        sleep(100);
+    }
 }
 
-/**
- * @brief PendSV interrupt callback
- * @n Just sets a flag for now
- */
-void pendsv_callback(void)
+/** @brief Sample task A */
+void taskB(void* arg1, void* arg2, void* arg3)
 {
-    test_pendsv = 1;
+    (void)arg1;
+    (void)arg2;
+    (void)arg3;
+    uint32_t cnt = 0;
+
+    while(1) {
+        print_hex(__func__, cnt);
+        cnt++;
+        sleep(1000);
+    }
 }
+
+/** @brief Register the tasks with the OS */
+OS_TASKS_INIT(
+    OS_TASK_DEFINE(taskA, 0, 0, 0, OS_LOWEST_PRIO + 1),
+    OS_TASK_DEFINE(taskB, 0, 0, 0, OS_LOWEST_PRIO + 1),
+);
 
 /**
  * @brief Entrypoint
  */
 void main(void)
 {
-    uint64_t ticks = 0;
-    uint64_t prevticks = 0;
 
     /* Sample data in literal pool */
     char * buffer = "Hello, literal pool!";
@@ -86,33 +104,10 @@ void main(void)
     bss_buffer[3] = 's';
     print(bss_buffer);
 
-    /* Initialize system tick with 1s interval, and the callback */
-    TICK_init(1000, &tick_callback);
+    /* Kick off scheduling. Will not return */
+    scheduler_start();
 
-    /* Register the PendSV callback */
-    PendSV_init(&pendsv_callback);
-
-    /* Loop forever and print current tick count. Proves both that the
-        internal tick count is incremented, and that the custom callback
-        is being run */
-    while(1) {
-        ticks = TICK_get();
-        if(ticks != prevticks) {
-            prevticks = ticks;
-            print_hex("Tick count: ", (uint32_t)test_tick);
-
-            /* Trigger the PendSV interrupt every 3rd iteration */
-            if(test_tick % 3 == 0) {
-                (void)PendSV_trigger();
-            }
-
-            print_hex("PendSV: ", (uint32_t)test_pendsv);
-
-            if(test_pendsv) {
-                test_pendsv = 0;
-            }
-        }
-    }
+    print("UNREACHABLE");
 
     while(1) { ; } 
 }

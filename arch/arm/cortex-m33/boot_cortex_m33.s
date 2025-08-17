@@ -74,7 +74,7 @@ Reset_Handler:
     msr     psp, r0                 /* Write r0 = __StackTop to PSP (Process Stack Pointer) */
     msr     msp, r0                 /* Write r0 = __StackTop to MSP (Main Stack Pointer) (?)*/
 
-    ldr     r0, = __StackLimit      /* Load Stack Limit to register r0 */
+    ldr     r0, = __TaskStackLimit  /* Load Stack Limit to register r0 */
     msr     msplim, r0              /* Write r0 = __StackLimit to MSPLIM (Main Stack Pointer LIMit) */
     msr     psplim, r0              /* Write r0 = __StackLimit to PSPLIM (Process Stack Pointer LIMit) */
 
